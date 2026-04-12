@@ -13,20 +13,71 @@
 
 > "财报是用来排除企业的，不是用来发现牛股的。" —— 唐朝
 
+## 安装
+
+### 前置条件
+
+- [Claude Code](https://claude.ai/claude-code) CLI
+- Python 3.9+
+- [Tushare Pro](https://tushare.pro/register) Token（免费注册）
+
+### 一键安装
+
+```bash
+git clone https://github.com/terancejiang/financial-report-minesweeper.git
+cd financial-report-minesweeper
+bash install.sh
+```
+
+安装脚本会自动：
+1. 检查 Python 环境和依赖（`tushare`, `pandas`, `requests`），缺少的自动安装
+2. 引导设置 `TUSHARE_TOKEN`（保存到 `.env`）
+3. 将 Skill 文件安装到 `~/.claude/commands/minesweeper/`
+4. 将年报下载 Skill 安装到 `~/.claude/commands/download-report.md`
+
+### 手动安装
+
+如果不想用安装脚本：
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/terancejiang/financial-report-minesweeper.git
+cd financial-report-minesweeper
+
+# 2. 安装 Python 依赖
+pip install tushare pandas requests
+
+# 3. 设置 Tushare Token (复制示例文件并填入你的 token)
+cp .env.example .env
+# 编辑 .env，将 your_token_here 替换为你的实际 token
+
+# 4. 安装 Skill 到 Claude Code
+mkdir -p ~/.claude/commands/minesweeper/references
+cp skill/SKILL.md ~/.claude/commands/minesweeper/
+cp skill/references/checklist-rules.md ~/.claude/commands/minesweeper/references/
+cp skill/download-report.md ~/.claude/commands/download-report.md
+```
+
+### 验证安装
+
+在 Claude Code 中输入 `/minesweeper 600519`，如果能正常获取数据并输出报告，说明安装成功。
+
 ## 使用方法
 
 在 Claude Code 中运行：
 
 ```
-/minesweeper 600519
-/minesweeper 000858 2023
+/minesweeper 600519          # 用股票代码
+/minesweeper 贵州茅台         # 用公司名称
+/minesweeper 000858 2023     # 指定年份
 ```
 
 Skill 会自动：
 1. 通过 Tushare API 获取 10 年结构化财务数据（三表 + 审计 + 股东 + 同行对比）
-2. 通过 `download-report` skill 下载最新年报 PDF（用于附注等定性分析）
+2. 通过内置下载脚本获取最新年报 PDF（用于附注等定性分析）
 3. 按 7 层 28 条规则逐条检查
 4. 输出带风险等级的排雷报告
+5. 保存原始数据、分析日志和报告到 `output/{stock_code}/`
 
 ## 数据源
 
@@ -392,26 +443,33 @@ Tushare 模块和年报下载脚本均已内置于项目 `scripts/` 目录中，
 ```
 financial_report_minesweeper/
 ├── README.md                        # 本文件
+├── install.sh                       # 一键安装脚本
 ├── .gitignore
-├── 手把手读财报/                     # 知识库（读书笔记 + 原书 PDF）
-│   ├── ch1~ch8 .md files
-│   └── *.pdf
-└── scripts/
-    ├── minesweeper_data.py          # 排雷专用数据获取脚本
-    ├── download_report.py           # 年报 PDF 下载工具
-    ├── config.py                    # Token 和股票代码管理
-    ├── format_utils.py              # 格式化工具
-    ├── tushare_collector.py         # Tushare API 客户端
-    └── tushare_modules/             # Tushare 模块
-        ├── __init__.py
-        ├── constants.py             # 字段映射常量
-        ├── infrastructure.py        # 基础设施工具
-        ├── financials.py            # 三表 + 指标获取
-        ├── other_data.py            # 审计 + 股东数据
-        ├── assembly.py              # 数据组装
-        ├── derived_metrics.py       # 派生指标计算
-        └── yfinance_integration.py  # yfinance 备用数据源
+├── skill/                           # Claude Code Skill 定义（安装时复制到 ~/.claude/commands/）
+│   ├── SKILL.md                     # 主 Skill 文件
+│   ├── download-report.md           # 年报下载 Skill
+│   └── references/
+│       └── checklist-rules.md       # 28 条规则详细阈值
+├── scripts/                         # 数据获取脚本
+│   ├── minesweeper_data.py          # 排雷专用数据获取
+│   ├── download_report.py           # 年报 PDF 下载工具
+│   ├── config.py                    # Token 和股票代码管理
+│   ├── format_utils.py              # 格式化工具
+│   ├── tushare_collector.py         # Tushare API 客户端
+│   └── tushare_modules/             # Tushare 子模块
+│       ├── financials.py            # 三表 + 指标获取
+│       ├── other_data.py            # 审计 + 股东数据
+│       └── ...
+├── 手把手读财报/                     # 知识库（读书笔记）
+│   ├── ch1~ch8 .md
+│   └── *.pdf (gitignored)
+└── output/                          # 分析输出（gitignored）
+    └── {stock_code}/
+        ├── raw_data.md
+        ├── report.md
+        └── analysis_log.md
 
+安装后 ~/.claude/commands/ 目录结构:
 ~/.claude/commands/minesweeper/
 ├── SKILL.md                         # 主 Skill 文件
 └── references/
