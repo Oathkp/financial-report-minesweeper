@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """财报排雷数据获取脚本 (Minesweeper Data Collector)
 
-使用本项目内置的 TushareClient，获取排雷分析所需的全部结构化数据。
+使用本项目内置的 AkshareClient，获取排雷分析所需的全部结构化数据。
 输出 JSON 到 stdout，供 Claude Code Skill 调用。
 
 Usage:
@@ -21,8 +21,8 @@ if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
 import pandas as pd
-from config import get_token, validate_stock_code
-from tushare_collector import TushareClient
+from config import validate_stock_code
+from akshare_collector import AkshareClient
 
 
 def _safe_val(v):
@@ -33,6 +33,8 @@ def _safe_val(v):
         return None
     if hasattr(v, "item"):  # numpy scalar
         return v.item()
+    if hasattr(v, "isoformat"):  # date/datetime objects
+        return v.isoformat()
     return v
 
 
@@ -49,181 +51,126 @@ def _df_to_records(df: pd.DataFrame, cols: list[str] | None = None) -> list[dict
     return records
 
 
-def get_stock_info(client: TushareClient, ts_code: str) -> dict:
+def get_stock_info(client: AkshareClient, ts_code: str) -> dict:
     """Get basic stock info including industry classification."""
     try:
-        df = client._safe_call(
-            "stock_basic", ts_code=ts_code,
-            fields="ts_code,name,industry,area,market,list_date,fullname"
-        )
+        # Use stock_individual_info_em which returns: 最新, 股票代码, 股票简称, 总股本, 流通股, 总市值, 流通市值, 行业, 上市时间
+        symbol = client._convert_code_to_akshare(ts_code)
+        df = client._safe_call("stock_individual_info_em", symbol=symbol)
         if df.empty:
             return {"ts_code": ts_code, "name": "", "industry": "", "market": ""}
-        row = df.iloc[0]
+        # Build lookup from the info table
+        info_dict = {}
+        for _, row in df.iterrows():
+            if len(row) >= 2:
+                key = _safe_val(row.iloc[0])
+                val = _safe_val(row.iloc[1])
+                if key:
+                    info_dict[key] = val
         return {
-            "ts_code": _safe_val(row.get("ts_code", ts_code)),
-            "name": _safe_val(row.get("name", "")),
-            "industry": _safe_val(row.get("industry", "")),
-            "area": _safe_val(row.get("area", "")),
-            "market": _safe_val(row.get("market", "")),
-            "list_date": _safe_val(row.get("list_date", "")),
-            "fullname": _safe_val(row.get("fullname", "")),
+            "ts_code": ts_code,
+            "name": info_dict.get("股票简称", ""),
+            "industry": info_dict.get("行业", ""),
+            "area": "",
+            "market": "",
+            "list_date": info_dict.get("上市时间", ""),
+            "fullname": "",
         }
     except Exception as e:
-        print(f"Warning: stock_basic failed: {e}", file=sys.stderr)
+        print(f"Warning: stock_individual_info_em failed: {e}", file=sys.stderr)
         return {"ts_code": ts_code, "name": "", "industry": "", "market": ""}
 
 
-def get_audit_data(client: TushareClient, ts_code: str) -> list[dict]:
-    """Get audit opinion history."""
+def get_audit_data(client: AkshareClient, ts_code: str) -> list[dict]:
+    """Get audit opinion history - akshare doesn't provide this directly."""
+    # Akshare doesn't have a direct audit opinion API; return empty
+    return []
+
+
+def get_income_data(client: AkshareClient, ts_code: str) -> list[dict]:
+    """Get income statement data (annual reports only) using stock_financial_report_sina."""
     try:
-        df = client._safe_call(
-            "fina_audit", ts_code=ts_code,
-            fields="ts_code,ann_date,end_date,audit_result,audit_agency,audit_fees"
-        )
+        symbol = client._convert_code_to_akshare(ts_code)
+        df = client._safe_call("stock_financial_report_sina", stock=symbol, symbol="利润表")
         if df.empty:
             return []
-        df = df.sort_values("end_date", ascending=False)
+        # Filter to annual reports (合并期末)
+        if "类型" in df.columns:
+            df = df[df["类型"] == "合并期末"].copy()
+        # Keep only year-end reports (report dates ending in 1231)
+        if "报告日" in df.columns:
+            df = df[df["报告日"].astype(str).str.endswith("1231")]
+        df = df.sort_values("报告日", ascending=False)
         return _df_to_records(df)
     except Exception as e:
-        print(f"Warning: fina_audit failed: {e}", file=sys.stderr)
+        print(f"Warning: income statement failed: {e}", file=sys.stderr)
         return []
 
 
-def get_income_data(client: TushareClient, ts_code: str) -> list[dict]:
-    """Get income statement data (annual reports only, report_type=1)."""
-    fields = (
-        "ts_code,end_date,ann_date,report_type,"
-        "revenue,oper_cost,biz_tax_surchg,"
-        "sell_exp,admin_exp,rd_exp,fin_exp,"
-        "assets_impair_loss,credit_impa_loss,"
-        "fv_value_chg_gain,invest_income,asset_disp_income,"
-        "oth_biz_income,oth_biz_cost,"
-        "operate_profit,non_oper_income,non_oper_exp,"
-        "total_profit,income_tax,n_income,n_income_attr_p,"
-        "basic_eps,diluted_eps"
-    )
+def get_balance_data(client: AkshareClient, ts_code: str) -> list[dict]:
+    """Get balance sheet data (annual reports only) using stock_financial_report_sina."""
     try:
-        df = client._safe_call(
-            "income", ts_code=ts_code, report_type="1", fields=fields
-        )
+        symbol = client._convert_code_to_akshare(ts_code)
+        df = client._safe_call("stock_financial_report_sina", stock=symbol, symbol="资产负债表")
         if df.empty:
             return []
-        df = df.sort_values("end_date", ascending=False)
-        # Keep only year-end reports (ending in 1231)
-        df = df[df["end_date"].str.endswith("1231")]
+        # Filter to annual reports (合并期末)
+        if "类型" in df.columns:
+            df = df[df["类型"] == "合并期末"].copy()
+        # Keep only year-end reports
+        if "报告日" in df.columns:
+            df = df[df["报告日"].astype(str).str.endswith("1231")]
+        df = df.sort_values("报告日", ascending=False)
         return _df_to_records(df)
     except Exception as e:
-        print(f"Warning: income failed: {e}", file=sys.stderr)
+        print(f"Warning: balance sheet failed: {e}", file=sys.stderr)
         return []
 
 
-def get_balance_data(client: TushareClient, ts_code: str) -> list[dict]:
-    """Get balance sheet data (annual reports only)."""
-    fields = (
-        "ts_code,end_date,ann_date,report_type,"
-        "money_cap,trad_asset,notes_receiv,accounts_receiv,"
-        "oth_receiv,prepayment,inventories,"
-        "total_cur_assets,"
-        "lt_eqt_invest,fix_assets,cip,intang_assets,goodwill,"
-        "lt_amort_deferred_exp,defer_tax_assets,"
-        "total_nca,total_assets,"
-        "st_borr,notes_payable,acct_payable,"
-        "contract_liab,adv_receipts,"
-        "non_cur_liab_due_1y,lt_borr,bond_payable,"
-        "total_cur_liab,total_ncl,total_liab,"
-        "defer_tax_liab,"
-        "total_hldr_eqy_exc_min_int,minority_int,total_hldr_eqy"
-    )
+def get_cashflow_data(client: AkshareClient, ts_code: str) -> list[dict]:
+    """Get cash flow statement data (annual reports only) using stock_financial_report_sina."""
     try:
-        df = client._safe_call(
-            "balancesheet", ts_code=ts_code, report_type="1", fields=fields
-        )
+        symbol = client._convert_code_to_akshare(ts_code)
+        df = client._safe_call("stock_financial_report_sina", stock=symbol, symbol="现金流量表")
         if df.empty:
             return []
-        df = df.sort_values("end_date", ascending=False)
-        df = df[df["end_date"].str.endswith("1231")]
+        # Filter to annual reports (合并期末)
+        if "类型" in df.columns:
+            df = df[df["类型"] == "合并期末"].copy()
+        # Keep only year-end reports
+        if "报告日" in df.columns:
+            df = df[df["报告日"].astype(str).str.endswith("1231")]
+        df = df.sort_values("报告日", ascending=False)
         return _df_to_records(df)
     except Exception as e:
-        print(f"Warning: balancesheet failed: {e}", file=sys.stderr)
+        print(f"Warning: cash flow statement failed: {e}", file=sys.stderr)
         return []
 
 
-def get_cashflow_data(client: TushareClient, ts_code: str) -> list[dict]:
-    """Get cash flow statement data (annual reports only)."""
-    fields = (
-        "ts_code,end_date,ann_date,report_type,"
-        "c_recp_prov_sg_act,"  # 销售商品、提供劳务收到的现金
-        "n_cashflow_act,"      # 经营活动现金流量净额
-        "n_cashflow_inv_act,"  # 投资活动现金流量净额
-        "n_cash_flows_fnc_act,"  # 筹资活动现金流量净额
-        "c_pay_acq_const_fiolta,"  # 购建固定资产等支付的现金 (capex)
-        "n_recp_disp_fiolta,"  # 处置固定资产等收回的现金
-        "free_cashflow,"       # 自由现金流 (if available)
-        "n_cash_end_bal,"      # 期末现金及现金等价物余额
-        "n_cash_beg_bal"       # 期初现金及现金等价物余额
-    )
+def get_indicator_data(client: AkshareClient, ts_code: str) -> list[dict]:
+    """Get financial indicators - akshare uses stock_financial_report_sina for this."""
+    # Akshare doesn't have a separate fina_indicator API equivalent;
+    # financial indicators can be derived from the income/balance data
+    return []
+
+
+def get_holder_data(client: AkshareClient, ts_code: str) -> list[dict]:
+    """Get top 10 shareholders using stock_main_stock_holder."""
     try:
-        df = client._safe_call(
-            "cashflow", ts_code=ts_code, report_type="1", fields=fields
-        )
+        symbol = client._convert_code_to_akshare(ts_code)
+        df = client._safe_call("stock_main_stock_holder", stock=symbol)
         if df.empty:
             return []
-        df = df.sort_values("end_date", ascending=False)
-        df = df[df["end_date"].str.endswith("1231")]
+        cols = ["股东名称", "持股数量", "持股比例", "截至日期"]
+        available = [c for c in cols if c in df.columns]
+        df = df[available].sort_values("持股比例", ascending=False)
         return _df_to_records(df)
     except Exception as e:
-        print(f"Warning: cashflow failed: {e}", file=sys.stderr)
+        print(f"Warning: stock_main_stock_holder failed: {e}", file=sys.stderr)
         return []
 
 
-def get_indicator_data(client: TushareClient, ts_code: str) -> list[dict]:
-    """Get financial indicators (ROE, margins, ratios, etc.)."""
-    fields = (
-        "ts_code,end_date,ann_date,"
-        "roe,roe_waa,grossprofit_margin,netprofit_margin,"
-        "rd_exp,"
-        "current_ratio,quick_ratio,"
-        "assets_turn,inv_turn,ar_turn,"
-        "debt_to_assets,"
-        "revenue_yoy,netprofit_yoy,op_yoy,"
-        "ocfps,bps,profit_dedt,"
-        "ebitda,fcff,netdebt,interestdebt,"
-        "extra_item,deduct_item"
-    )
-    try:
-        df = client._safe_call(
-            "fina_indicator", ts_code=ts_code, fields=fields
-        )
-        if df.empty:
-            return []
-        df = df.sort_values("end_date", ascending=False)
-        # Keep year-end reports
-        df = df[df["end_date"].str.endswith("1231")]
-        return _df_to_records(df)
-    except Exception as e:
-        print(f"Warning: fina_indicator failed: {e}", file=sys.stderr)
-        return []
-
-
-def get_holder_data(client: TushareClient, ts_code: str) -> list[dict]:
-    """Get top 10 shareholders for multiple periods."""
-    try:
-        df = client._safe_call("top10_holders", ts_code=ts_code)
-        if df.empty:
-            return []
-        df = df.sort_values(["end_date", "hold_amount"],
-                            ascending=[False, False])
-        # Keep last 3 reporting periods
-        periods = df["end_date"].unique()[:3]
-        df = df[df["end_date"].isin(periods)]
-        cols = ["end_date", "holder_name", "hold_amount", "hold_ratio"]
-        return _df_to_records(df, cols)
-    except Exception as e:
-        print(f"Warning: top10_holders failed: {e}", file=sys.stderr)
-        return []
-
-
-def get_peer_data(client: TushareClient, ts_code: str,
+def get_peer_data(client: AkshareClient, ts_code: str,
                   industry: str) -> dict:
     """Get peer company financial indicators for comparison.
 
@@ -234,15 +181,19 @@ def get_peer_data(client: TushareClient, ts_code: str,
         return {"industry": "", "peers": []}
 
     try:
-        # Get all companies in the same industry
-        all_stocks = client._safe_call(
-            "stock_basic",
-            fields="ts_code,name,industry"
-        )
+        # Get all stocks to find industry peers
+        all_stocks = client._safe_call("stock_info_a_code_name")
         if all_stocks.empty:
             return {"industry": industry, "peers": []}
 
-        peers = all_stocks[all_stocks["industry"] == industry]
+        # Filter by industry if column exists
+        if "industry" in all_stocks.columns:
+            peers = all_stocks[all_stocks["industry"] == industry]
+        elif "所属行业" in all_stocks.columns:
+            peers = all_stocks[all_stocks["所属行业"] == industry]
+        else:
+            return {"industry": industry, "peers": []}
+
         # Exclude self and limit to 20 peers
         peers = peers[peers["ts_code"] != ts_code].head(20)
 
@@ -253,30 +204,30 @@ def get_peer_data(client: TushareClient, ts_code: str,
         for _, peer_row in peers.iterrows():
             peer_code = peer_row["ts_code"]
             try:
+                # Get financial data for peer
                 ind_df = client._safe_call(
-                    "fina_indicator", ts_code=peer_code,
-                    fields="ts_code,end_date,grossprofit_margin,netprofit_margin,"
-                           "debt_to_assets,roe,assets_turn,inv_turn,ar_turn"
+                    "stock_financial_report_sina", stock=peer_code, symbol="利润表"
                 )
                 if ind_df.empty:
                     continue
                 # Get latest year-end data
-                ind_df = ind_df[ind_df["end_date"].str.endswith("1231")]
+                if "报告日" in ind_df.columns:
+                    ind_df = ind_df[ind_df["报告日"].astype(str).str.endswith("1231")]
                 if ind_df.empty:
                     continue
-                ind_df = ind_df.sort_values("end_date", ascending=False)
+                ind_df = ind_df.sort_values("报告日", ascending=False)
                 latest = ind_df.iloc[0]
                 peer_data.append({
                     "ts_code": _safe_val(peer_code),
                     "name": _safe_val(peer_row.get("name", "")),
-                    "end_date": _safe_val(latest.get("end_date", "")),
-                    "grossprofit_margin": _safe_val(latest.get("grossprofit_margin")),
-                    "netprofit_margin": _safe_val(latest.get("netprofit_margin")),
-                    "debt_to_assets": _safe_val(latest.get("debt_to_assets")),
-                    "roe": _safe_val(latest.get("roe")),
-                    "assets_turn": _safe_val(latest.get("assets_turn")),
-                    "inv_turn": _safe_val(latest.get("inv_turn")),
-                    "ar_turn": _safe_val(latest.get("ar_turn")),
+                    "end_date": _safe_val(latest.get("报告日", "")),
+                    "grossprofit_margin": _safe_val(latest.get("毛利率")),
+                    "netprofit_margin": _safe_val(latest.get("净利率")),
+                    "debt_to_assets": None,
+                    "roe": _safe_val(latest.get("净资产收益率")),
+                    "assets_turn": None,
+                    "inv_turn": None,
+                    "ar_turn": None,
                 })
             except Exception:
                 continue  # Skip peers that fail
@@ -302,8 +253,7 @@ def collect_minesweeper_data(stock_code: str, years: int = 10) -> dict:
     ts_code = validate_stock_code(stock_code)
 
     # Initialize client
-    token = get_token()
-    client = TushareClient(token)
+    client = AkshareClient()
 
     print(f"Collecting data for {ts_code}...", file=sys.stderr)
 
