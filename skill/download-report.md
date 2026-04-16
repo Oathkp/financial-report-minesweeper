@@ -33,28 +33,28 @@ Use the **WebSearch** tool to find the PDF. Use a multi-round search strategy, s
 ### Round 1 — 巨潮资讯网 (cninfo.com.cn, official CSRC disclosure platform)
 
 **For A-share stocks** (巨潮搜索用公司名称效果更好):
-- 年报: `site:cninfo.com.cn {company_name} {year} 年度报告`
-- 中报: `site:cninfo.com.cn {company_name} {year} 半年度报告`
-- 一季报: `site:cninfo.com.cn {company_name} {year} 第一季度报告`
-- 三季报: `site:cninfo.com.cn {company_name} {year} 第三季度报告`
+- 年报: `cninfo.com.cn {company_name} {year} 年度报告`
+- 中报: `cninfo.com.cn {company_name} {year} 半年度报告`
+- 一季报: `cninfo.com.cn {company_name} {year} 第一季度报告`
+- 三季报: `cninfo.com.cn {company_name} {year} 第三季度报告`
 
-If company name is unknown, use stock code: `site:cninfo.com.cn {formatted_code} {year} 年度报告`
+If company name is unknown, use stock code: `cninfo.com.cn {formatted_code} {year} 年度报告`
 
 ### Round 2 — 雪球 stockn (fallback)
 
 **For A-share stocks:**
-- 年报: `site:stockn.xueqiu.com {formatted_code} 年度报告 {year}`
-- 中报: `site:stockn.xueqiu.com {formatted_code} 半年度报告 {year}`
-- 一季报: `site:stockn.xueqiu.com {formatted_code} 第一季度报告 {year}`
-- 三季报: `site:stockn.xueqiu.com {formatted_code} 第三季度报告 {year}`
+- 年报: `stockn.xueqiu.com {formatted_code} 年度报告 {year}`
+- 中报: `stockn.xueqiu.com {formatted_code} 半年度报告 {year}`
+- 一季报: `stockn.xueqiu.com {formatted_code} 第一季度报告 {year}`
+- 三季报: `stockn.xueqiu.com {formatted_code} 第三季度报告 {year}`
 
 **For HK stocks:**
-- 年报/annual: `site:stockn.xueqiu.com {formatted_code} annual report {year}`
-- 中报/interim: `site:stockn.xueqiu.com {formatted_code} interim report {year}`
+- 年报/annual: `stockn.xueqiu.com {formatted_code} annual report {year}`
+- 中报/interim: `stockn.xueqiu.com {formatted_code} interim report {year}`
 
 ### Round 3 — Generic fallback
 
-Retry the search **without** the `site:` prefix: `{formatted_code} {year} 年度报告 PDF`
+Retry the search **without** the `` prefix: `{formatted_code} {year} 年度报告 PDF`
 
 ### If no year was specified:
 1. Try current year first

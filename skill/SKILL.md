@@ -134,9 +134,8 @@ Download the PDF using the project's built-in download script.
 
 First, use WebSearch to find the PDF URL:
 ```
-search: site:cninfo.com.cn {stock_code_with_market_prefix} 年度报告 {year}
+search: cninfo.com.cn {company_name} 年度报告 {year}
 ```
-where `stock_code_with_market_prefix` is the code formatted as SH600519 (Shanghai) or SZ000858 (Shenzhen).
 
 Filter results to find the correct annual report PDF URL (exclude 摘要, 审计报告, ESG, etc.).
 
