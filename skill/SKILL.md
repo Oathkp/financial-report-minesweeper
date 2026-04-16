@@ -42,6 +42,15 @@ mkdir -p {project_root}/output/{stock_code}
 
 All intermediate data and the final report will be saved here. Use `{stock_code}` as the directory name (e.g., `002598`).
 
+## Phase 0.5: Step into python3 venv
+
+Run the following command, and ask the user to confirm the venv name if multiple are found:
+```bash
+source ~/{env_name}/bin/activate
+```
+remember to replace `{env_name}` with the actual name of the virtual environment that contains the required Python packages (e.g., tushare, pandas). This ensures that all subsequent Python scripts run with the correct dependencies.
+and keep the user choice in mind for the next runs.
+
 ## Phase 1: Fetch Structured Data (Tushare)
 
 Run the data collection script:
