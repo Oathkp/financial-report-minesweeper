@@ -1,6 +1,11 @@
 #!/bin/bash
 # 财报排雷 Skill 安装脚本
-# Usage: bash install.sh
+# Usage: bash install.sh [--force]
+
+FORCE=false
+if [ "$1" = "--force" ] || [ "$1" = "-f" ]; then
+    FORCE=true
+fi
 
 set -e
 
@@ -78,20 +83,25 @@ echo -e "${YELLOW}[3/5] 安装排雷 Skill...${NC}"
 MINESWEEPER_DIR="$CLAUDE_COMMANDS_DIR/minesweeper"
 mkdir -p "$MINESWEEPER_DIR/references"
 
-cp "$SCRIPT_DIR/skill/SKILL.md" "$MINESWEEPER_DIR/SKILL.md"
-cp "$SCRIPT_DIR/skill/references/checklist-rules.md" "$MINESWEEPER_DIR/references/checklist-rules.md"
-
-echo "  已安装到 $MINESWEEPER_DIR"
+if [ "$FORCE" = true ]; then
+    cp "$SCRIPT_DIR/skill/SKILL.md" "$MINESWEEPER_DIR/SKILL.md"
+    cp "$SCRIPT_DIR/skill/references/checklist-rules.md" "$MINESWEEPER_DIR/references/checklist-rules.md"
+    echo "  已强制覆盖安装到 $MINESWEEPER_DIR"
+else
+    cp "$SCRIPT_DIR/skill/SKILL.md" "$MINESWEEPER_DIR/SKILL.md"
+    cp "$SCRIPT_DIR/skill/references/checklist-rules.md" "$MINESWEEPER_DIR/references/checklist-rules.md"
+    echo "  已安装到 $MINESWEEPER_DIR"
+fi
 
 # Step 4: Install download-report skill
 echo -e "${YELLOW}[4/5] 安装年报下载 Skill...${NC}"
 
 DOWNLOAD_REPORT="$CLAUDE_COMMANDS_DIR/download-report.md"
-if [ -f "$DOWNLOAD_REPORT" ]; then
+if [ -f "$DOWNLOAD_REPORT" ] && [ "$FORCE" != true ]; then
     echo "  download-report.md 已存在, 跳过"
 else
     cp "$SCRIPT_DIR/skill/download-report.md" "$DOWNLOAD_REPORT"
-    echo "  已安装到 $DOWNLOAD_REPORT"
+    [ "$FORCE" = true ] && echo "  已强制覆盖安装到 $DOWNLOAD_REPORT" || echo "  已安装到 $DOWNLOAD_REPORT"
 fi
 
 # Step 5: Verify
