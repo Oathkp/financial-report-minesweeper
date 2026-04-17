@@ -6,6 +6,7 @@ Parse the user input from `$ARGUMENTS` into three parts:
 - **stock_code** (required): stock ticker code
 - **year** (optional): report year, defaults to searching for the latest available
 - **report_type** (optional): defaults to 年报
+- **pdf_url** (optional): user-provided PDF URL, if any
 
 ### Market Detection
 
@@ -25,6 +26,17 @@ Determine the market and format the code:
 | 三季报 / Q3 | 三季报 | 第三季度报告 | Same year Oct |
 
 **Note:** HK stocks only support 年报(annual) and 中报(interim). 一季报 and 三季报 are A-share only.
+
+## Step 0.5: Ask User for PDF URL (Priority)
+
+**First, ask the user** if they can provide the PDF URL:
+
+```
+Ask: "请提供年报 PDF 下载链接（可选）。如您有 cninfo 或其他来源的 PDF 直链，请直接提供；否则我将自动搜索。"
+```
+
+- **If user provides a URL**: Use it directly → proceed to Step 3 (Download).
+- **If user says none / declines**: Proceed to Step 1 (WebSearch).
 
 ## Step 1: Search for the Report
 

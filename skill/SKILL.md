@@ -130,16 +130,30 @@ The following rules require PDF-only data:
 - Rule 5.6 (cross-industry acquisitions)
 - Rule 6.2 (R&D capitalization ratio)
 
-Download the PDF using the project's built-in download script.
+### Step A: Ask User for PDF URL (Priority)
 
-First, use WebSearch to find the PDF URL:
+**First, ask the user directly** if they can provide the PDF URL:
+
+```
+Ask: "请提供年报 PDF 下载链接（可选）。如您有 cninfo 或其他来源的 PDF 直链，请直接提供；否则我将自动搜索。"
+```
+
+- **If user provides a URL**: Use it directly (skip Step B).
+- **If user declines or says none**: Proceed to Step B (WebSearch).
+
+### Step B: WebSearch for PDF URL (Fallback)
+
+If no URL provided by the user, search for it:
+
 ```
 search: cninfo.com.cn {company_name} 年度报告 {year}
 ```
 
 Filter results to find the correct annual report PDF URL (exclude 摘要, 审计报告, ESG, etc.).
 
-Then download:
+### Step C: Download the PDF
+
+Download using the project's built-in download script:
 ```bash
 python3 {project_root}/scripts/download_report.py \
   --url "{pdf_url}" \
