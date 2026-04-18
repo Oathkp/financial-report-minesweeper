@@ -27,20 +27,29 @@ Parse `$ARGUMENTS` into:
 - `stock_code` (required): A-share stock code (e.g., 600519, 000858) or Chinese company name
 - `year` (optional): specific year to analyze, defaults to latest available
 
-If the user provides a Chinese name instead of a code, use WebSearch to resolve the ticker:
-```
-search: "{company_name} 股票代码 A股"
-```
+**Resolve both stock_code and company_name**: Before creating the output directory, you must have both pieces of information.
+
+- If the user provides a **stock code** (e.g., 600519), use WebSearch to get the company name:
+  ```
+  search: "{stock_code} 股票 公司名称 A股"
+  ```
+
+- If the user provides a **Chinese company name**, use WebSearch to resolve the ticker:
+  ```
+  search: "{company_name} 股票代码 A股"
+  ```
+
+After resolution, you should have both `stock_code` (e.g., `600519`) and `company_name` (e.g., `贵州茅台`) available for subsequent steps.
 
 ## Output Directory Setup
 
 Before fetching data, create the output directory for this analysis:
 
 ```bash
-mkdir -p {project_root}/output/{stock_code}
+mkdir -p {project_root}/output/{stock_code}_{company_name}
 ```
 
-All intermediate data and the final report will be saved here. Use `{stock_code}` as the directory name (e.g., `002598`).
+All intermediate data and the final report will be saved here. Use `{stock_code}_{company_name}` as the directory name (e.g., `600519_贵州茅台`).
 
 ## Phase 0.5: Step into python3 venv
 
@@ -66,7 +75,7 @@ Parse the JSON result. This is the **primary data source** for quantitative rule
 
 If the script fails or returns `{"error": "..."}`, report the error and stop.
 
-**Save raw data**: Write the JSON output to `output/{stock_code}/raw_data.md` using this format:
+**Save raw data**: Write the JSON output to `output/{stock_code}_{company_name}/raw_data.md` using this format:
 
 ```markdown
 # {name} ({ts_code}) - Tushare 原始数据
@@ -160,7 +169,7 @@ python3 {project_root}/scripts/download_report.py \
   --stock-code "{stock_code_with_market_prefix}" \
   --report-type "年报" \
   --year "{year}" \
-  --save-dir "{project_root}/output/{stock_code}"
+  --save-dir "{project_root}/output/{stock_code}_{company_name}"
 ```
 
 Parse the output between `---RESULT---` and `---END---` markers for status and filepath.
@@ -168,7 +177,7 @@ Parse the output between `---RESULT---` and `---END---` markers for status and f
 Then convert the PDF to plain text and read it into context in full:
 
 ```bash
-pdftotext -layout "{pdf_filepath}" "{project_root}/output/{stock_code}/annual_report.txt"
+pdftotext -layout "{pdf_filepath}" "{project_root}/output/{stock_code}_{company_name}/annual_report.txt"
 ```
 
 This converts the entire annual report to a text file, preserving table layout. Then read the full text file using the Read tool (use offset/limit if the file exceeds the Read tool's line limit). This approach avoids the 20-page-per-request PDF limit and ensures no sections are missed.
@@ -361,13 +370,13 @@ Output the report in this **exact** format (严格遵守，不得增删段落或
 
 Save all artifacts to the output directory using the Write tool.
 
-### File 1: `output/{stock_code}/raw_data.md`
+### File 1: `output/{stock_code}_{company_name}/raw_data.md`
 Already saved in Phase 1. Contains all Tushare data in readable markdown tables.
 
-### File 2: `output/{stock_code}/report.md`
+### File 2: `output/{stock_code}_{company_name}/report.md`
 Save the full minesweeper report (the exact output from Phase 5) as a markdown file. Use the same formatting as the terminal output.
 
-### File 3: `output/{stock_code}/analysis_log.md`
+### File 3: `output/{stock_code}_{company_name}/analysis_log.md`
 Save a detailed analysis log with intermediate calculations:
 
 ```markdown
@@ -419,7 +428,7 @@ Save a detailed analysis log with intermediate calculations:
 After saving all files, tell the user:
 
 ```
-已保存分析结果到 output/{stock_code}/:
+已保存分析结果到 output/{stock_code}_{company_name}/:
   - raw_data.md    (Tushare 原始数据, {n} 行)
   - report.md      (排雷报告)
   - analysis_log.md (分析日志与计算过程)
